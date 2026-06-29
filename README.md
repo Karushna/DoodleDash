@@ -1,13 +1,3 @@
-## Devvit Phaser Starter
-
-A starter to build web applications on Reddit's developer platform
-
-- [Devvit](https://developers.reddit.com/): A way to build and deploy immersive games on Reddit
-- [Vite](https://vite.dev/): For compiling the webView
-- [Phaser](https://phaser.io/): 2D game engine
-- [Hono](https://hono.dev/): For backend logic
-- [TypeScript](https://www.typescriptlang.org/): For type safety
-
 ## Getting Started
 
 > Make sure you have Node 22 downloaded on your machine before running!
