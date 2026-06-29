@@ -21,22 +21,22 @@
     "items": [
       {
         "label": "Create a new post",
-        "description": "<% name %>",
+        "description": "Doodle Dash",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
       },
       {
-        "label": "Example form",
-        "description": "Show a simple form",
+        "label": "Submit a drawing prompt",
+        "description": "Add a prompt to the daily challenge queue",
         "location": "subreddit",
         "forUserType": "moderator",
-        "endpoint": "/internal/menu/example-form"
+        "endpoint": "/internal/menu/prompt-form"
       }
     ]
   },
   "forms": {
-    "exampleForm": "/internal/form/example-submit"
+    "promptForm": "/internal/form/prompt-submit"
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install"

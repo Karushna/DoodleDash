@@ -7,26 +7,41 @@
       name="viewport"
       content="initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, width=device-width, height=device-height, user-scalable=0"
     />
-    <title>devvit</title>
+    <title>Doodle Dash</title>
   </head>
   <body class="app">
-    <img class="snoo" src="/snoo.png" alt="Snoo" />
-    <div class="content">
-      <h1 class="title" id="title"></h1>
-      <p class="description">
-        Edit <span class="code">src/client/splash.ts</span> to get started.
-      </p>
+    <div class="header">
+      <div class="logo-text">🎨 Doodle Dash</div>
+      <div class="tagline">Daily Drawing Challenge</div>
     </div>
-    <div>
-      <button class="start-button" id="start-button">Start</button>
+
+    <div class="challenge-box">
+      <div class="challenge-label">TODAY'S CHALLENGE</div>
+      <div class="challenge-prompt" id="challenge-prompt">Loading…</div>
     </div>
-    <footer class="footer">
-      <div class="docs-link" tabindex="0" id="docs-link">Docs</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="playtest-link">r/Devvit</div>
-      <span class="divider">|</span>
-      <div class="docs-link" tabindex="0" id="discord-link">Discord</div>
-    </footer>
+
+    <div class="meta-row">
+      <div class="streak-badge" id="streak-badge" style="display:none">
+        🔥 <span id="streak-count">0</span>-day streak
+      </div>
+      <div class="drawing-count" id="drawing-count"></div>
+    </div>
+
+    <div class="button-group">
+      <button class="btn btn-primary" id="draw-btn">Draw Now</button>
+      <button class="btn btn-secondary" id="gallery-btn">View Gallery</button>
+    </div>
+
+    <div class="submit-prompt-row">
+      <div class="submit-link" id="submit-prompt-link">+ Submit a prompt for tomorrow</div>
+    </div>
+
+    <div class="prompt-form" id="prompt-form" style="display:none">
+      <input type="text" class="prompt-input" id="prompt-input" placeholder="e.g. a friendly robot" maxlength="80" />
+      <button class="btn btn-submit" id="prompt-submit-btn">Submit</button>
+      <div class="prompt-msg" id="prompt-msg"></div>
+    </div>
+
     <script type="module" src="splash.ts" defer></script>
   </body>
 </html>
