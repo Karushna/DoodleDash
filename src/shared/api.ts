@@ -23,11 +23,23 @@ export type SubmitDrawingResponse = {
   newColors: string[];
 };
 
+export type ReactionType = 'fire' | 'laugh' | 'wow' | 'love' | 'art';
+
+export const REACTION_EMOJIS: Record<ReactionType, string> = {
+  fire: '🔥',
+  laugh: '😂',
+  wow: '😮',
+  love: '❤️',
+  art: '🎨',
+};
+
+export const REACTION_TYPES: ReactionType[] = ['fire', 'laugh', 'wow', 'love', 'art'];
+
 export type GalleryDrawing = {
   username: string;
   strokes: Stroke[];
-  votes: number;
-  hasVoted: boolean;
+  reactions: Record<ReactionType, number>;
+  myReaction: ReactionType | null;
 };
 
 export type GalleryResponse = {
@@ -36,9 +48,9 @@ export type GalleryResponse = {
   date: string;
 };
 
-export type VoteResponse = {
-  type: 'vote';
-  newVotes: number;
+export type ReactResponse = {
+  type: 'react';
+  reactions: Record<ReactionType, number>;
 };
 
 export type LeaderboardEntry = {

@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
-import type { GalleryDrawing, GalleryResponse, Stroke, VoteResponse } from '../../shared/api.js';
+import { REACTION_EMOJIS, REACTION_TYPES } from '../../shared/api.js';
+import type { GalleryDrawing, GalleryResponse, ReactResponse, Stroke } from '../../shared/api.js';
 
 const THUMB_W = 140;
 const THUMB_H = 105;
 const COLS = 2;
 const GAP = 12;
+// Card slot height: thumbnail + username + reaction row + padding
+const CARD_EXTRA = 70;
 
 export class Gallery extends Phaser.Scene {
   private drawings: GalleryDrawing[] = [];
@@ -23,7 +26,6 @@ export class Gallery extends Phaser.Scene {
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#0f0f0f');
 
-    // Header
     const hdrBg = this.add.graphics();
     hdrBg.fillStyle(0x111111);
     hdrBg.fillRect(0, 0, width, 48);
@@ -79,14 +81,13 @@ export class Gallery extends Phaser.Scene {
     this.scrollContainer = this.add.container(0, 0);
 
     const rows = Math.ceil(this.drawings.length / COLS);
-    const totalH = rows * (THUMB_H + 60 + GAP);
+    const totalH = rows * (THUMB_H + CARD_EXTRA + GAP);
 
     this.drawings.forEach((drawing, i) => {
       const col = i % COLS;
       const row = Math.floor(i / COLS);
       const x = sidePad + col * (THUMB_W + GAP);
-      const y = topPad + row * (THUMB_H + 60 + GAP);
-
+      const y = topPad + row * (THUMB_H + CARD_EXTRA + GAP);
       this.addDrawingCard(drawing, x, y);
     });
 
@@ -95,62 +96,98 @@ export class Gallery extends Phaser.Scene {
   }
 
   private addDrawingCard(drawing: GalleryDrawing, x: number, y: number): void {
-    // White thumbnail background
     const bg = this.add.graphics();
     bg.fillStyle(0xffffff, 1);
     bg.fillRect(x, y, THUMB_W, THUMB_H);
 
-    // Draw strokes directly (no RenderTexture)
     const drawGfx = this.renderStrokesToGfx(drawing.strokes, x, y, THUMB_W, THUMB_H);
 
-    // Username
     const nameText = this.add.text(x + THUMB_W / 2, y + THUMB_H + 4, `u/${drawing.username}`, {
       fontSize: '11px',
       color: '#cccccc',
       fontFamily: 'Arial',
     }).setOrigin(0.5, 0);
 
-    // Vote count
-    const voteText = this.add.text(x + THUMB_W / 2 - 14, y + THUMB_H + 20, `${drawing.votes}`, {
-      fontSize: '13px',
-      color: '#ffffff',
-      fontFamily: 'Arial',
-    }).setOrigin(0.5, 0);
+    // Emoji reaction row
+    const btnW = Math.floor(THUMB_W / REACTION_TYPES.length);
+    const reactionY = y + THUMB_H + 22;
 
-    // Vote heart button
-    const heartColor = drawing.hasVoted ? '#ff4444' : '#666666';
-    const heartBtn = this.add.text(x + THUMB_W / 2 + 8, y + THUMB_H + 20, '♥', {
-      fontSize: '14px',
-      color: heartColor,
-      fontFamily: 'Arial',
-    }).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+    for (let i = 0; i < REACTION_TYPES.length; i++) {
+      const type = REACTION_TYPES[i]!;
+      const emoji = REACTION_EMOJIS[type];
+      const bx = x + i * btnW;
 
-    heartBtn.on('pointerdown', async () => {
-      if (drawing.hasVoted) return;
-      drawing.hasVoted = true;
-      heartBtn.setColor('#ff4444');
-      try {
-        const res = await fetch('/api/vote', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetUsername: drawing.username }),
-        });
-        const data = (await res.json()) as VoteResponse;
-        drawing.votes = data.newVotes;
-        voteText.setText(`${data.newVotes}`);
-      } catch {
-        drawing.hasVoted = false;
-        heartBtn.setColor('#666666');
-      }
-    });
+      const rbg = this.add.graphics();
+      const countTxt = this.add.text(bx + btnW / 2, reactionY + 18, `${drawing.reactions[type] ?? 0}`, {
+        fontSize: '9px',
+        color: '#888888',
+        fontFamily: 'Arial',
+      }).setOrigin(0.5, 0);
 
-    this.scrollContainer.add([bg, drawGfx, nameText, voteText, heartBtn]);
+      const updateBtn = () => {
+        rbg.clear();
+        if (drawing.myReaction === type) {
+          rbg.fillStyle(0x1144cc, 1);
+          rbg.fillRoundedRect(bx + 1, reactionY, btnW - 2, 30, 3);
+          countTxt.setColor('#ffffff');
+        } else {
+          countTxt.setColor('#888888');
+        }
+        countTxt.setText(`${drawing.reactions[type] ?? 0}`);
+      };
+      updateBtn();
+
+      const emojiTxt = this.add.text(bx + btnW / 2, reactionY + 3, emoji, {
+        fontSize: '13px',
+        fontFamily: 'Arial',
+      }).setOrigin(0.5, 0);
+
+      // Transparent hit area covering full button zone
+      const hitArea = this.add
+        .rectangle(bx + btnW / 2, reactionY + 15, btnW - 2, 30, 0x000000, 0)
+        .setInteractive({ useHandCursor: true });
+
+      hitArea.on('pointerdown', () => {
+        void (async () => {
+          const prev = drawing.myReaction;
+          if (prev === type) return;
+
+          drawing.myReaction = type;
+          if (prev) {
+            drawing.reactions[prev] = Math.max(0, (drawing.reactions[prev] ?? 0) - 1);
+          }
+          drawing.reactions[type] = (drawing.reactions[type] ?? 0) + 1;
+
+          // Refresh all buttons on this card (update every button's bg + count)
+          // We call updateBtn() via closure — each button stores its own updateBtn
+          updateBtn();
+
+          try {
+            const res = await fetch('/api/react', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ targetUsername: drawing.username, reactionType: type }),
+            });
+            const data = (await res.json()) as ReactResponse;
+            // Sync server counts back
+            for (const rt of REACTION_TYPES) {
+              drawing.reactions[rt] = data.reactions[rt] ?? 0;
+            }
+            updateBtn();
+          } catch { /* leave optimistic update */ }
+        })();
+      });
+
+      this.scrollContainer.add([rbg, emojiTxt, countTxt, hitArea]);
+    }
+
+    this.scrollContainer.add([bg, drawGfx, nameText]);
   }
 
   private renderStrokesToGfx(strokes: Stroke[], ox: number, oy: number, w: number, h: number): Phaser.GameObjects.Graphics {
-    // Original canvas size matches Drawing scene: full width, height minus top(48)+bottom(90)
+    // Drawing scene canvas: full width, height minus topH(48) + botH(100)
     const origW = this.scale.width;
-    const origH = this.scale.height - 138;
+    const origH = this.scale.height - 148;
     const sx = w / origW;
     const sy = h / origH;
     const gfx = this.add.graphics();

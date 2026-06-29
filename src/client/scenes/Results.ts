@@ -49,7 +49,7 @@ export class Results extends Phaser.Scene {
 
     // Draw strokes directly (no RenderTexture)
     const origW = this.scale.width;
-    const origH = this.scale.height - 138; // Drawing scene canvas height
+    const origH = this.scale.height - 148; // Drawing scene canvas height (topH=48 + botH=100)
     const scaleX = previewW / origW;
     const scaleY = previewH / origH;
 

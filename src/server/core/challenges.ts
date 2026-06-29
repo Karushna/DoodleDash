@@ -11,7 +11,7 @@ const FALLBACK_PROMPTS = [
 
 type ChallengeRecord = { prompt: string; date: string; submittedBy: string };
 type StreakRecord = { current: number; longest: number; lastDate: string };
-type DrawingRecord = { strokes: Stroke[]; submittedAt: string; votes: number; username: string };
+type DrawingRecord = { strokes: Stroke[]; submittedAt: string; reactions: Record<string, number>; votes?: number; username: string };
 type PromptQueueItem = { prompt: string; submittedBy: string; submittedAt: string };
 
 export async function getDailyChallenge(): Promise<ChallengeRecord> {

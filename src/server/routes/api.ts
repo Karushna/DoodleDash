@@ -6,11 +6,13 @@ import type {
   GalleryResponse,
   InitResponse,
   LeaderboardResponse,
+  ReactResponse,
+  ReactionType,
   SubmitDrawingRequest,
   SubmitDrawingResponse,
   SubmitPromptResponse,
-  VoteResponse,
 } from '../../shared/api.js';
+import { REACTION_TYPES } from '../../shared/api.js';
 import {
   getDailyChallenge,
   getLeaderboard,
@@ -72,14 +74,12 @@ api.post('/drawing/submit', async (c) => {
     const drawingRecord: DrawingRecord = {
       strokes,
       submittedAt: new Date().toISOString(),
-      votes: 0,
+      reactions: { fire: 0, laugh: 0, wow: 0, love: 0, art: 0 },
       username,
     };
 
-    // Save drawing
     await redis.set(keys.drawing(date, username), JSON.stringify(drawingRecord));
 
-    // Update drawings list
     const listRaw = await redis.get(keys.drawingsList(date));
     const list: string[] = listRaw ? (JSON.parse(listRaw) as string[]) : [];
     if (!list.includes(username)) {
@@ -87,7 +87,6 @@ api.post('/drawing/submit', async (c) => {
       await redis.set(keys.drawingsList(date), JSON.stringify(list));
     }
 
-    // Update streak + register user for leaderboard
     const { streak: newStreakData } = await updateStreak(username);
     await registerUser(username);
 
@@ -112,23 +111,37 @@ api.get('/gallery', async (c) => {
     const listRaw = await redis.get(keys.drawingsList(date));
     const list: string[] = listRaw ? (JSON.parse(listRaw) as string[]) : [];
 
+    const emptyReactions = (): Record<ReactionType, number> =>
+      ({ fire: 0, laugh: 0, wow: 0, love: 0, art: 0 });
+
     const drawings: GalleryDrawing[] = [];
     for (const user of list) {
       const raw = await redis.get(keys.drawing(date, user));
       if (!raw) continue;
       const record = JSON.parse(raw) as DrawingRecord;
-      const voteKey = keys.vote(date, user, username);
-      const hasVoted = username ? (await redis.get(voteKey)) === '1' : false;
-      drawings.push({
-        username: user,
-        strokes: record.strokes,
-        votes: record.votes,
-        hasVoted,
-      });
+
+      const reactions: Record<ReactionType, number> = record.reactions
+        ? { ...emptyReactions(), ...record.reactions }
+        : { ...emptyReactions(), love: record.votes ?? 0 };
+
+      let myReaction: ReactionType | null = null;
+      if (username) {
+        const stored = await redis.get(keys.vote(date, user, username));
+        if (stored && REACTION_TYPES.includes(stored as ReactionType)) {
+          myReaction = stored as ReactionType;
+        } else if (stored === '1') {
+          myReaction = 'love';
+        }
+      }
+
+      drawings.push({ username: user, strokes: record.strokes, reactions, myReaction });
     }
 
-    // Sort by votes descending
-    drawings.sort((a, b) => b.votes - a.votes);
+    drawings.sort((a, b) => {
+      const sumA = Object.values(a.reactions).reduce((s, n) => s + n, 0);
+      const sumB = Object.values(b.reactions).reduce((s, n) => s + n, 0);
+      return sumB - sumA;
+    });
 
     return c.json<GalleryResponse>({ type: 'gallery', drawings, date });
   } catch (error) {
@@ -137,39 +150,51 @@ api.get('/gallery', async (c) => {
   }
 });
 
-api.post('/vote', async (c) => {
+api.post('/react', async (c) => {
   try {
     const voter = await reddit.getCurrentUsername();
     if (!voter) return c.json<ErrorResponse>({ type: 'error', message: 'Not logged in' }, 401);
 
-    const { targetUsername } = await c.req.json<{ targetUsername: string }>();
-    if (!targetUsername) return c.json<ErrorResponse>({ type: 'error', message: 'Missing targetUsername' }, 400);
+    const { targetUsername, reactionType } = await c.req.json<{
+      targetUsername: string;
+      reactionType: ReactionType;
+    }>();
+    if (!targetUsername || !reactionType || !REACTION_TYPES.includes(reactionType)) {
+      return c.json<ErrorResponse>({ type: 'error', message: 'Invalid request' }, 400);
+    }
 
     const date = today();
     const voteKey = keys.vote(date, targetUsername, voter);
+    const prevRaw = await redis.get(voteKey);
 
-    // Prevent double vote
-    const alreadyVoted = await redis.get(voteKey);
-    if (alreadyVoted) {
-      const raw = await redis.get(keys.drawing(date, targetUsername));
-      const record = raw ? (JSON.parse(raw) as DrawingRecord) : { votes: 0 };
-      return c.json<VoteResponse>({ type: 'vote', newVotes: record.votes });
-    }
-
-    // Mark vote
-    await redis.set(voteKey, '1');
-
-    // Increment votes on drawing
     const raw = await redis.get(keys.drawing(date, targetUsername));
     if (!raw) return c.json<ErrorResponse>({ type: 'error', message: 'Drawing not found' }, 404);
 
     const record = JSON.parse(raw) as DrawingRecord;
-    record.votes += 1;
-    await redis.set(keys.drawing(date, targetUsername), JSON.stringify(record));
 
-    return c.json<VoteResponse>({ type: 'vote', newVotes: record.votes });
+    if (!record.reactions) {
+      record.reactions = { fire: 0, laugh: 0, wow: 0, love: record.votes ?? 0, art: 0 };
+    }
+
+    if (prevRaw === reactionType) {
+      return c.json<ReactResponse>({ type: 'react', reactions: record.reactions as Record<ReactionType, number> });
+    }
+
+    if (prevRaw) {
+      const prev = (REACTION_TYPES.includes(prevRaw as ReactionType) ? prevRaw : 'love') as ReactionType;
+      record.reactions[prev] = Math.max(0, (record.reactions[prev] ?? 0) - 1);
+    }
+
+    record.reactions[reactionType] = (record.reactions[reactionType] ?? 0) + 1;
+
+    await Promise.all([
+      redis.set(voteKey, reactionType),
+      redis.set(keys.drawing(date, targetUsername), JSON.stringify(record)),
+    ]);
+
+    return c.json<ReactResponse>({ type: 'react', reactions: record.reactions as Record<ReactionType, number> });
   } catch (error) {
-    console.error('API vote error:', error);
+    console.error('API react error:', error);
     return c.json<ErrorResponse>({ type: 'error', message: String(error) }, 500);
   }
 });
