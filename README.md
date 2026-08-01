@@ -1,6 +1,6 @@
 ## Getting Started
 
-> Make sure you have Node 22 downloaded on your machine before running!
+> Make sure you have Node 22 downloaded on your machine before running!!
 
 1. Run `npm create devvit@latest --template=phaser`
 2. Go through the installation wizard. You will need to create a Reddit account and connect it to Reddit developers
